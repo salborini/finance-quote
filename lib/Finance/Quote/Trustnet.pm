@@ -84,6 +84,7 @@ sub trustnet
 	# ISIN code - look it up
 	$url = $TRUSTNET_ISIN_LOOKUP . $trusto;
 	$reply = $ua->request(GET $url);
+	return unless ($reply->is_success);
 	$lte->parse($reply->content);
 	$lts = $lte->first_table_found;
 	if (defined($lts)) {
@@ -127,6 +128,7 @@ sub trustnet
 			  $url = "$url&$page";
 			  # print STDERR "Switching to correct page $url\n";
 			  $reply = $ua->request(GET $url);
+			  return unless ($reply->is_success);
 			  last OUTER;
 		      }
 		      # else continue to next page
@@ -238,12 +240,15 @@ specifically want to use trustnet.co.uk.
 
 =head1 UNIT TRUST NAMES
 
-Unfortunately there is no unique identifier for unit trust names.
-Therefore enough of the name should be given including spaces to yield
-a unique match.  Trustnet sometimes uses abbreviated names, and the
-string given should match the abbreviation.
+Unfortunately Trustnet does not allow to get to the price by
+ISIN. Therefore the strategy is to go through the list of prices and
+do some name matching.  Trustnet sometimes uses abbreviated names, and
+the string given should match the abbreviation.  Therefore enough of
+the name should be given including spaces to yield a unique match.
+The module also accepts an ISIN code, and will resolve it to the
+trustnet name (at the cost of an extra web query).  trust names.
 
-Consult http://www.trustnet.co.uk/ut/funds/perf.asp?sort=0
+Consult http://www.trustnet.com/Investments/Perf.aspx?univ=U
 to find a match for your unit trusts.
 
 Example "jupiter income"

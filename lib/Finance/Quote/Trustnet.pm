@@ -33,19 +33,20 @@ require 5.004;
 
 use strict;
 
-use vars qw($VERSION $TRUSTNET_URL $TRUSTNET_ALL);
+use vars qw($VERSION $TRUSTNET_URL $TRUSTNET_ALL $TRUSTNET_ISIN_LOOKUP);
 
 use LWP::UserAgent;
 use HTTP::Request::Common;
 use HTML::TableExtract;
+use HTML::TreeBuilder;
 
 $VERSION = '1.17';
 
 # URLs of where to obtain information.
 
-$TRUSTNET_URL = ('http://www.trustnet.com/ut/funds/perf.asp?reg=all&sec=all&type=all&sort=5&ss=0&booAutif=0&columns=13&unit=');
-
-$TRUSTNET_ALL="http://www.trustnet.com/ut/funds/perf.asp";
+$TRUSTNET_URL = "http://www.trustnet.com/Investments/Perf.aspx?univ=U";
+$TRUSTNET_ALL = "http://www.trustnet.com/Investments/Perf.aspx?univ=U";
+$TRUSTNET_ISIN_LOOKUP = "http://www.trustnet.com/Tools/Search.aspx?uw=uw&scope=all&on=f&keyword=";
 
 sub methods { return (uk_unit_trusts => \&trustnet, trustnet => \&trustnet); }
 
@@ -64,51 +65,88 @@ sub trustnet
     my @symbols = @_;
     
     return unless @symbols;
-    my(@q,%aa,$ua,$url,$sym,$ts,$price,$currency,$reply,$trust,$trusto,$unittype,$suffix);
+    my(@q,%aa,$ua,$url,$sym,$ts,$price,$currency,$reply,$trust,$trusto,$unittype,$suffix,$pts,$lts);
     my ($row, $datarow, $matches, $encoded);
-    my %curr_iso = (GBP => "GBP", "£" => "GBP", "\$" => "USD");
     
     my %symbolhash;
     @symbolhash{@symbols} = map(1,@symbols);
+    $ua = $quoter->user_agent;
     # 
     for (@symbols) {
-      my $te = new HTML::TableExtract( headers => [("Fund Name", "Group Name", "Bid Price", "Offer Price", "Yield")]);
+      my $te = new HTML::TableExtract( headers => [("Fund", "Group", "Bid", "Offer", "Yield")]);
+      my $pte = new HTML::TableExtract( attribs => { id => "pagingTable_top" }, keep_html => 1 );
+      my $lte = new HTML::TableExtract( headers => [("Fund", "Group")]);
       $trust = $_;
       # determine unit type
-      $unittype = "all";
-      $trusto = $trust;   # retain full trust name for gnucash helper
-      $trusto =~ s/(\(INC\)|\(ACC\))$//i; # trust name w/o suffix for trustnet
+      $unittype = "";
+      $trusto = $trust;   # retain original trust name for gnucash helper
+      if (uc($trusto) =~ /[A-Z]{2}[A-Z0-9]{9}\d/) {
+	# ISIN code - look it up
+	$url = $TRUSTNET_ISIN_LOOKUP . $trusto;
+	$reply = $ua->request(GET $url);
+	$lte->parse($reply->content);
+	$lts = $lte->first_table_found;
+	if (defined($lts)) {
+	    $trusto = ($lts->rows)[0][0];
+	    # print STDERR "ISIN $trust is fund \"$trusto\"\n";
+	}
+      }
+      $trusto =~ /\b(INC|ACC)\b/i;
       $suffix = $1;
       if (defined($suffix)) {
-	$unittype = "inc" if ($suffix =~ /\(INC\)/i);
-	$unittype = "acc" if ($suffix =~ /\(ACC\)/i);
+	$unittype = "&Pf_IncAcc=I" if ($suffix =~ /INC/i);
+	$unittype = "&Pf_IncAcc=A" if ($suffix =~ /ACC/i);
       }
       $trusto =~ s/\s+$//;
       $trusto =~ s/&amp;/&/g;
       $encoded = $trusto;
       $encoded =~ s/&/%26/g;
-      $url = "$TRUSTNET_URL$unittype&txtS=$encoded";
+      $url = "$TRUSTNET_URL$unittype";
 
       # print STDERR "Retrieving \"$trust\" from $url\n";
-      $ua = $quoter->user_agent;
       $reply = $ua->request(GET $url);
       return unless ($reply->is_success);
       
       # print STDERR $reply->content,"\n";
+      $pte->parse($reply->content);
+      $pts = $pte->first_table_found;
+      if( defined ($pts)) {
+	  my ($cell, $link, $page, $first, $last);
+	  OUTER: foreach $row ($pts->rows) {
+	      foreach $cell (@$row) {
+		  $link = HTML::TreeBuilder->new_from_content($cell)->find("a");
+		  if (defined $link) {
+		      ($first, $last) = split(' > ', $link->attr("title"));
+		      if ( uc($trusto) lt uc($first) && ! ($first =~ /^$trusto/i) ) {
+			  # went too far
+			  last OUTER;
+		      } elsif ( uc($trusto) le uc($last) ) {
+			  # that's our page
+			  $page = $link->attr("href");
+			  $page =~ s/.*(Pf_PageNo=\d*).*/\1/;
+			  $url = "$url&$page";
+			  # print STDERR "Switching to correct page $url\n";
+			  $reply = $ua->request(GET $url);
+			  last OUTER;
+		      }
+		      # else continue to next page
+		  }
+	      }
+	  }
+      }
       
       $te->parse($reply->content);
-      $ts  = ($te->table_states)[0];
+      $ts  = $te->first_table_found;
       
       if( defined ($ts)) {
 	# check the trust name - first look for an exact match trimming trailing spaces
 	$matches = 0;
 	foreach $row ($ts->rows) {
-	    # Try to weed out extraneous rows.
-	    next if !defined($$row[1]);
+	  # Try to weed out extraneous rows.
+	  next if !defined($$row[1]);
 	  ($sym = $$row[0]) =~ s/^ +//;
 	  $sym =~ s/ +\xA0.+//;
-	  
-	  #  print "Checking <", $sym,  "> for <", $trusto, ">\n";
+	  # print "Checking <", $sym,  "> for <", $trusto, ">\n";
 	  if ($sym =~ /^$trusto$/i) {
 	    $matches++;
 	    $datarow = $row;
@@ -140,13 +178,17 @@ sub trustnet
 	  $aa {$trust, "source"} = "http://www.trustnet.co.uk/";
 	  ($aa {$trust, "name"} = $$datarow[0]) =~ s/^ +//;
 	  $aa {$trust, "symbol"} = $trust;
-	  ($price = $$datarow[2]) =~ s/\s*\((.*)\)//;
-	  $currency=$1||"GBP";
-	  $aa {$trust, "currency"} = $curr_iso{"$currency"};
-	  $aa {$trust, "bid"} = $price * 0.01;
+	  ($price, undef ,$currency) = ($$datarow[2] =~ /([\d.]*)\s*(\((.*)\))?/);
+	  if (!defined($currency)) {
+	      # "All prices in Pence Sterling (GBX) unless otherwise specified."
+	      $currency = "GBP";
+	      $price = $price * 0.01;
+	  }
+	  $aa {$trust, "currency"} = $currency;
+	  $aa {$trust, "bid"} = $price;
 	  ($price = $$datarow[3]) =~ s/\s*\((.*)\)//;
 	  $price = $aa {$trust, "bid"} if  $price eq "";
-	  $aa {$trust, "ask"} = $price * 0.01;
+	  $aa {$trust, "ask"} = $price;
 	  $aa {$trust, "yield"} = $$datarow[4];
 	  $aa {$trust, "price"} = $aa{$trust,"bid"};
 	  $aa {$trust, "success"} = 1;

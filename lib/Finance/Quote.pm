@@ -41,9 +41,11 @@ use Data::Dumper;
 
 use vars qw/@ISA @EXPORT @EXPORT_OK @EXPORT_TAGS
             $VERSION $TIMEOUT %MODULES %METHODS $AUTOLOAD
-            $YAHOO_CURRENCY_URL $USE_EXPERIMENTAL_UA/;
+            $YAHOO_CURRENCY_URL $YAHOO_CURRENCY_QUOTES_URL
+            $USE_EXPERIMENTAL_UA/;
 
 $YAHOO_CURRENCY_URL = "http://uk.finance.yahoo.com/q?s=";
+$YAHOO_CURRENCY_QUOTES_URL = "http://uk.finance.yahoo.com/d/quotes.csv?e=.csv&f=l&s=";
 
 @ISA    = qw/Exporter/;
 @EXPORT = ();
@@ -238,36 +240,82 @@ sub currency {
 
   return $amount if ($from eq $to); # Trivial case.
 
-  my $ua = $this->user_agent;
+  sub primary_url {
+      my ($this,$from,$to) = @_;
 
-  my $data = $ua->request(GET "${YAHOO_CURRENCY_URL}$from$to%3DX")->content;
-  # The web page returns utf8 content which gives a warning when parsing $data
-  # in HTML::Parser
-  my $tb = HTML::TreeBuilder->new_from_content(decode_utf8($data));
+      my $ua = $this->user_agent;
 
-  # Find the <div> with the data
-  my $div = $tb->look_down('id','yfi_quote_summary_data');
-  # Make sure there's a <div> to parse.
-  return undef unless $div;
+      my $data = $ua->request(GET "${YAHOO_CURRENCY_URL}$from$to%3DX")->content;
+      # The web page returns utf8 content which gives a warning when parsing $data
+      # in HTML::Parser
+      my $tb = HTML::TreeBuilder->new_from_content(decode_utf8($data));
 
-  # The first <b> should contain the quote
-  my $rate_element=$div->look_down('_tag','b');
-  # Make sure there's a <b> to parse.
-  return undef unless $rate_element;
+      # Find the <div> with the data
+      my $div = $tb->look_down('id','yfi_quote_summary_data');
+      # Make sure there's a <div> to parse.
+      return undef unless $div;
 
-  my $exchange_rate=$rate_element->as_text;
+      # The first <b> should contain the quote
+      my $rate_element=$div->look_down('_tag','b');
+      # Make sure there's a <b> to parse.
+      return undef unless $rate_element;
 
-        $exchange_rate =~ s/,// ; # solve a bug when conversion rate
-                                  # involves thousands. yahoo inserts
-                                  # a comma when thousands occur
+      my $exchange_rate=$rate_element->as_text;
 
-  {
-    local $^W = 0;  # Avoid undef warnings.
-
-    # We force this to a number to avoid situations where
-    # we may have extra cruft, or no amount.
-    return undef unless ($exchange_rate+0);
+      $exchange_rate =~ s/,// ; # solve a bug when conversion rate
+                                # involves thousands. yahoo inserts
+                                # a comma when thousands occur
+      {
+        local $^W = 0;  # Avoid undef warnings.
+        return undef unless ($exchange_rate+0);
+      }
+      return $exchange_rate * 1.0;
   }
+
+
+  sub secondary_url {
+      my ($this,$from,$to) = @_;
+      # Check against alternative URL as the original URL gives a rate
+      # multiplied by 100 for some currencies, for instance for NOKGBP=X
+      # (compare with GBPNOK=X)
+      # 
+      # The alternative "CSV download" URL does not have this problem
+      # and don't require any screenscrapingm but the resolution is
+      # lower, typically just 2 digits, so we should only use it if we
+      # find a large difference from the original exchange rate.
+      #
+      # See http://www.gummy-stuff.org/Yahoo-data.htm for details about the
+      # fields for the f= parameter.
+      my $ua = $this->user_agent;
+      my $quotes_rate = $ua->request(GET "${YAHOO_CURRENCY_QUOTES_URL}$from$to%3DX")->content;
+      { 
+          # Avoid undef warnings.
+          local $^W = 0;  
+          return undef unless ($quotes_rate+0);
+      }
+      return $quotes_rate * 1.0;
+    }
+
+     my $primary_rate = primary_url($this, $from, $to);
+     my $secondary_rate = secondary_url($this, $from, $to);
+     my $exchange_rate = $primary_rate;
+
+     if ( $primary_rate && $secondary_rate ) {
+        my $ratio = $primary_rate / $secondary_rate;
+        if ( $ratio < 0.5 || $ratio > 2 ) {
+          # Large difference, ignore $primary_rate 
+          # (This seems to happen for NOK->GBP, DKK->USD)
+          $exchange_rate = $secondary_rate;
+          # TODO: Work out the difference in scale (typically 100)
+          # and multiply the original $exchange_rate
+        }
+     } elsif ( !$primary_rate && $secondary_rate ) {
+        # $primary rate failed, fall back to secondary
+        $exchange_rate = $secondary_rate;
+     } elsif ( ! $exchange_rate ) {
+        return undef;
+     }
+
   return ($exchange_rate * $amount);
 }
 

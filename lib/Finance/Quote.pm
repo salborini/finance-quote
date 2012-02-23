@@ -45,7 +45,7 @@ use vars qw/@ISA @EXPORT @EXPORT_OK @EXPORT_TAGS
             $USE_EXPERIMENTAL_UA/;
 
 $YAHOO_CURRENCY_URL = "http://uk.finance.yahoo.com/q?s=";
-$YAHOO_CURRENCY_QUOTES_URL = "http://uk.finance.yahoo.com/d/quotes.csv?e=.csv&f=l&s=";
+$YAHOO_CURRENCY_QUOTES_URL = "http://uk.finance.yahoo.com/d/quotes.csv?e=.csv&f=l1&s=";
 
 @ISA    = qw/Exporter/;
 @EXPORT = ();
@@ -251,13 +251,15 @@ sub currency {
       my $tb = HTML::TreeBuilder->new_from_content(decode_utf8($data));
 
       # Find the <div> with the data
-      my $div = $tb->look_down('id','yfi_quote_summary_data');
+      my $div = $tb->look_down('id','yfi_investing_content');
       # Make sure there's a <div> to parse.
       return undef unless $div;
 
-      # The first <b> should contain the quote
-      my $rate_element=$div->look_down('_tag','b');
-      # Make sure there's a <b> to parse.
+      # Find the <span> that contains the quote
+      my $lcfrom = lc($from);
+      my $lcto = lc($to);
+      my $rate_element=$div->look_down('id', "yfs_l10_$lcfrom$lcto=x");
+      # Make sure there's a <span> to parse.
       return undef unless $rate_element;
 
       my $exchange_rate=$rate_element->as_text;

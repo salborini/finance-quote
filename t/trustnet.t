@@ -7,7 +7,7 @@ if (not $ENV{ONLINE_TEST}) {
     plan skip_all => 'Set $ENV{ONLINE_TEST} to run this test';
 }
 
-plan tests => 12;
+plan tests => 14;
 
 # Test trustnet functions.
 
@@ -15,7 +15,7 @@ my $q = Finance::Quote->new();
 my $year = (localtime())[5] + 1900;
 my $lastyear = $year - 1;
 
-my @stocks = ("ABBEY NATIONAL INTERNATIONAL","MARLBOROUGH INTERNATIONAL EQUITY");
+my @stocks = ("Aberdeen Charity Select UK Bond Acc","M&G European Strategic Value C Acc EUR");
 
 my %quotes = $q->fetch("trustnet",@stocks);
 
@@ -27,6 +27,7 @@ ok(%quotes);
 foreach my $stock (@stocks) {
   ok($quotes{$stock,"success"});
   ok($quotes{$stock,"price"});
+  ok($quotes{$stock,"currency"});
   ok($quotes{$stock,"date"});
   ok(substr($quotes{$stock,"isodate"},0,4) == $year ||
        substr($quotes{$stock,"isodate"},0,4) == $lastyear);

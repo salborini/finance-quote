@@ -39,6 +39,7 @@ use LWP::UserAgent;
 use HTTP::Request::Common;
 use HTML::TableExtract;
 use HTML::TreeBuilder;
+use Encode;
 
 $VERSION = '1.17';
 
@@ -109,7 +110,7 @@ sub trustnet
       return unless ($reply->is_success);
       
       # print STDERR $reply->content,"\n";
-      $pte->parse($reply->content);
+      $pte->parse(decode_utf8($reply->content));
       $pts = $pte->first_table_found;
       if( defined ($pts)) {
 	  my ($cell, $link, $page, $first, $last);
@@ -124,7 +125,7 @@ sub trustnet
 		      } elsif ( uc($trusto) le uc($last) ) {
 			  # that's our page
 			  $page = $link->attr("href");
-			  $page =~ s/.*(Pf_PageNo=\d*).*/\1/;
+			  $page =~ s/.*(Pf_PageNo=\d*).*/$1/;
 			  $url = "$url&$page";
 			  # print STDERR "Switching to correct page $url\n";
 			  $reply = $ua->request(GET $url);
@@ -137,7 +138,7 @@ sub trustnet
 	  }
       }
       
-      $te->parse($reply->content);
+      $te->parse(decode_utf8($reply->content));
       $ts  = $te->first_table_found;
       
       if( defined ($ts)) {
@@ -188,8 +189,10 @@ sub trustnet
 	  }
 	  $aa {$trust, "currency"} = $currency;
 	  $aa {$trust, "bid"} = $price;
-	  ($price = $$datarow[3]) =~ s/\s*\((.*)\)//;
-	  $price = $aa {$trust, "bid"} if  $price eq "";
+	  if (defined($$datarow[3])) {
+	      ($price = $$datarow[3]) =~ s/\s*\((.*)\)//;
+	      $price = $aa {$trust, "bid"} if  $price eq "";
+	  }
 	  $aa {$trust, "ask"} = $price;
 	  $aa {$trust, "yield"} = $$datarow[4];
 	  $aa {$trust, "price"} = $aa{$trust,"bid"};

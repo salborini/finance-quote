@@ -300,6 +300,22 @@ sub currency {
 
      my $primary_rate = primary_url($this, $from, $to);
      my $secondary_rate = secondary_url($this, $from, $to);
+     
+     # If the rate is very small we get no accuracy so take the reciprocal
+     # of the inverse rate.
+     if ( $primary_rate && $primary_rate < .001 ) {
+        $primary_rate = 1 / primary_url($this, $to, $from);
+        if ( $primary_rate ) {
+           $primary_rate = int($primary_rate * 100000000 + .5) / 100000000;
+        }
+     }
+     if ( $secondary_rate && $secondary_rate < .001 ) {
+        $secondary_rate = 1 / secondary_url($this, $to, $from);
+        if ( $secondary_rate ) {
+           $secondary_rate = int($secondary_rate * 100000000 + .5) / 100000000;
+        }
+     }
+     
      my $exchange_rate = $primary_rate;
 
      if ( $primary_rate && $secondary_rate ) {

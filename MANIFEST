@@ -24,6 +24,7 @@ lib/Finance/Quote/ASEGR.pm
 lib/Finance/Quote/ASX.pm
 lib/Finance/Quote/BMONesbittBurns.pm
 lib/Finance/Quote/Bourso.pm
+lib/Finance/Quote/BSERO.pm
 lib/Finance/Quote/Cdnfundlibrary.pm
 lib/Finance/Quote/Cominvest.pm
 lib/Finance/Quote/Currencies.pm
@@ -80,6 +81,7 @@ t/asegr.t
 t/asx.t
 t/bmonesbittburns.t
 t/bourso.t
+t/bsero.t
 t/cdnfundlibrary.t
 t/cominvest.t
 t/currencies.t

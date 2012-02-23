@@ -32,6 +32,7 @@ lib/Finance/Quote/Deka.pm
 lib/Finance/Quote/DWS.pm
 lib/Finance/Quote/Fidelity.pm
 lib/Finance/Quote/FinanceCanada.pm
+lib/Finance/Quote/FinancialTimes.pm
 lib/Finance/Quote/Finanzpartner.pm
 lib/Finance/Quote/Fool.pm
 lib/Finance/Quote/FTPortfolios.pm
@@ -91,6 +92,7 @@ t/deka.t
 t/dws.t
 t/fidelity.t
 t/financecanada.t
+t/financialtimes.t
 t/finanzpartner.t
 t/ftportfolios.t
 t/goldmoney.t

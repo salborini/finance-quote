@@ -170,8 +170,8 @@ sub new {
     shift(@reqmodules) if (@reqmodules);
     # Default modules
     @modules = qw/AEX AIAHK ASEGR ASX BMONesbittBurns BSERO Bourso Cdnfundlibrary
-            Currencies Deka DWS FTPortfolios Fidelity FinanceCanada Fool HU
-            GoldMoney HEX
+            Currencies Deka DWS FTPortfolios Fidelity FinanceCanada FinancialTimes
+            Fool HU GoldMoney HEX
             IndiaMutual LeRevenu ManInvestments Morningstar NZX Platinum SEB
             StockHouseCanada TSP TSX Tdefunds Tdwaterhouse Tiaacref Troweprice
             Trustnet Union USFedBonds VWD ZA Cominvest Finanzpartner

@@ -323,7 +323,13 @@ sub currency {
         if ( $ratio < 0.5 || $ratio > 2 ) {
           # Large difference, ignore $primary_rate 
           # (This seems to happen for NOK->GBP, DKK->USD)
-          $exchange_rate = $secondary_rate;
+          if ( $ratio < 106 && $ratio > 94 ) {
+            # off by factor of 100, this is the typical error
+            $exchange_rate = $exchange_rate / 100;
+          }
+          else {
+            $exchange_rate = $secondary_rate;
+          }
           # TODO: Work out the difference in scale (typically 100)
           # and multiply the original $exchange_rate
         }

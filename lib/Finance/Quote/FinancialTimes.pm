@@ -35,7 +35,6 @@ use HTTP::Request::Common;
 use HTML::TableExtract;
 use HTML::TreeBuilder;
 use Encode;
-use Date::Manip;
 
 $VERSION = '1.17';
 
